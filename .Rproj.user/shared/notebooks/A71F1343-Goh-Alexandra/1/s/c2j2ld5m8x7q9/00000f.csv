@@ -1,0 +1,3 @@
+"0",""
+"0","sampledata1 <- sampledata1 %>% select(!c(""loan_id"", ""seller"", ""cscore_b"", ""cscore_c"", ""servicer""))"
+"0",""

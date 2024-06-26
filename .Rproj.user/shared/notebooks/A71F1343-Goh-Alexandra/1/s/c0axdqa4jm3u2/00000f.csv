@@ -1,0 +1,2 @@
+"0",""
+"0","plot(density(sampledata$orig_amt), main = ""Kernel Density Plot of Original UPB"", xlab = ""Original UPB"")"

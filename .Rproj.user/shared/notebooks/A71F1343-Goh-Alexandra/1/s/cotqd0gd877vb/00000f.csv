@@ -1,0 +1,5 @@
+"0",""
+"0","ggplot(sampledata2, aes(x = income)) + "
+"0","  geom_histogram(binwidth = 10000, fill = ""blue"", color = ""white"") + "
+"0","  labs(title = ""Original Distribution of Income"", x = ""Income"", y = ""Frequency"")"
+"0",""

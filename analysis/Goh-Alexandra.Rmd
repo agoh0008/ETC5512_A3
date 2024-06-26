@@ -1,0 +1,322 @@
+---
+title: "Data deidentification and modification"
+subtitle: ETC5512 Assignment 3, Master of Business Analytics
+author: Prepared by Alexandra Goh, 29796431, agoh0008@student.monash.edu 
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    css: monashreport.css
+    includes:
+      before_body: header.html
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(here)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+
+knitr::opts_chunk$set(echo = TRUE, 
+                      messages = FALSE, 
+                      warning = FALSE)
+
+```
+
+# 🔍 Analysis
+
+Before diving into the loan performance dataset, there are several steps and checks that need to be conducted using the data science ethics checklist which covers various aspects such as data collection and storage (DrivenData, n.d.). Other aspects covering data analysis, modeling and deployment (i.e. later phases) are also important, however the first steps of data collection and storage are especially crucial to ensure that the data is of high quality, secure and meets ethical standards. 
+
+### Data Collection
+
+- Informed consent: as ABC Bank collects loan performance data from their customers as part of their business operations, they should have obtained informed consent from their customers before collecting their data. We also need to ensure that we are authorized  to legally access the data.
+
+- Collection Bias: as this loan performance data is derived from ABC Bank's business operations, it may not be representative of the entire loan population. Hence, ABC Bank should have implemented standardized data collection protocols (e.g. consistent data entry procedures and definitions of loan attributes, standardized methods for identifying delinquencies/foreclosures) and robust quality assurance processes so that the data collected is complete and accurate. 
+
+- Limit PII exposure: to protect the privacy of borrowers, loan performance data should not contain any personally identifiable information (PII) of borrowers (e.g. name, social security numbers) if it is going to be released to the public. If they exist, these should be anonymized/removed.
+
+- Downstream bias mitigation: to test for downstream biases in loan analysis, attributes such as income, age, borrower's credit score and loan-to-value ratio can be used. For instance, if there are significant differences in loan performance outcomes across different groups based on these attributes, this could indicate downstream bias. Hence, steps should be taken to ensure that neither of these attributes are being used as a primary factor in loan decisions or outcomes.
+
+### Data Storage
+
+- Data security: to ensure that loan performance data is stored securely, ABC Bank's policies and procedures related to data security should be reviewed. This includes verifying that appropriate access controls are in place to restrict access to only authorized individuals and ensuring the data storage system used to store loan performance data remains up-to-date by implementing regular software updates. 
+
+- Right to be forgotten: ABC Bank should have a mechanism in place through which individuals can request their personal information to be removed. This mechanism should be easily accessible and user-friendly, as it relates to data privacy and individual rights. 
+
+- Data Retention Plan: we need to formulate a schedule or plan in place to delete the loan performance data after it is no longer needed and that this plan is followed thoroughly. This includes verifying that any backup copies are also subject to the same data retention/deletion policies. 
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata <- readRDS(here::here("raw_data/loanData.rds"))
+
+```
+
+# Removing Direct Identifiers 
+
+The direct identifiers that are removed are the first names and last names of borrowers. These alone can directly reveal the identity of a borrower. 
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata1 <- sampledata %>% select(!c("last_name", "first_name"))
+
+```
+
+# De-identification Strategy
+
+Firstly, we conduct random sampling (using a sample size of 1,000,000) to select a representative subset of the population for release. Not only does this help reduce the possibility of selection bias, it also lowers the risk of re-identification of individuals in a dataset by creating uncertainty whether any particular individual is in the data. However, there is limited control over the sample selection process which may be slightly problematic if there are certain characteristics of the population that are important to capture in the sample.
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata1 <- sample_n(sampledata1, 1000000)
+
+```
+
+
+There are also certain potentially identifying variables that need to be removed from the dataset in order to reduce the risk of identification. This includes the **loan identifier**, **borrower/co-borrower credit scores at origination**, **seller name** as well as **servicer name**.
+
+A **loan identifier** is used to uniquely identify a specific loan within a dataset. In general, this alone does not provide personally identifiable information (PII) about the borrower or the mortgage loan. However, if it's combined with other information such as borrower's name/address, it would be possible to identify an individual. For example, if another dataset includes loan identifiers and borrower names, someone with access to this can use the loan identifier to look up the borrower's name which compromises their privacy. Additionally, loan identifiers are typically used as internal tracking numbers for lenders/banks and therefore not meant to be disclosed as public information.  
+
+Similarly, **borrower/co-borrower credit scores** could potentially lead to the identification of a specific individual or individuals if combined with other information such as income or property address (which may be retrieved from other external sources). For example, if there is only one loan for a particular property with a specific borrower credit score, this could potentially be used to identify the borrower. Borrower/co-borrower credit scores are also not allowed for public data release and can only often be shared with certain parties in limited circumstances such as borrowers/lenders themselves or government agencies (but these are typically subject to strict data protection and privacy safeguards too). 
+
+For both **seller and servicer names**, it is not necessary to include them in the public data release. This is because the focus should primarily be on the loan-level data and the overall performance of the loans. Furthermore, if a particular seller/servicer regularly sells/services loans to ABC Bank and someone has access to information about the loans they sell from public records or other sources of information, this poses a risk as they could potentially combine this information to personally identify borrowers. 
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata1 <- sampledata1 %>% select(!c("loan_id", "seller", "cscore_b", "cscore_c", "servicer"))
+
+```
+
+We also apply **perturbation** to the expenses/revenue items and transactional data associated with management and disposition of the loans. Perturbation reduces the risk of re-identification by adding a small amount of noise or obscuring specific loan details while still preserving the overall statistical properties of the data set. This is because each loan may have unique characteristics such as different original unpaid principal balances, property preservation and repair costs, or more. These details make the loan data highly specific and granular, thereby increasing the risk of re-identification of individuals. For example, if a dataset includes transactional data related to loans for a particular geographic area, a borrower may still be identified by their loan details, even if their name or other personal identifying information is not included in the data set.
+
+The variables involved are **Original UPB, UPB at the Time of Removal, Property Preservation and Repair Costs, Asset Recovery Costs, Miscellaneous Holding Expenses and Credits, Associated Taxes for Holding Property, Net Sales Proceeds, Credit Enhancement Proceeds, Repurchase Make Whole Proceeds, Other Foreclosure Proceeds, 180 days unpaid principal balance, Account closure balance, 30 days unpaid principal balance, 60 days unpaid principal balance, 90 days unpaid principal balance**, and **Loan first modification unpaid principal balance.**
+
+Taking Original UPB as an example, we visualize the original distribution of the dataset before making any modifications. We also find the range of the Original UPB to determine a suitable noise amount to introduce to the dataset, before proceeding with the perturbation. After selecting "2000" as the noise amount for Original UPB, we then visualize the distribution of the dataset which includes the newly modified Original UPB. 
+
+```{r, message = FALSE, eval = TRUE}
+
+plot(density(sampledata$orig_amt), main = "Kernel Density Plot of Original UPB", xlab = "Original UPB")
+
+# Find the maximum value of orig_am
+max_orig_amt <- max(sampledata$orig_amt)
+print(max_orig_amt)
+
+# Find the minimum value of orig_am
+min_orig_amt <- min(sampledata$orig_amt)
+print(min_orig_amt)
+
+```
+According to the density plot below, it can be seen that the Original UPB's distribution remains relatively the same even after adding '2000' as the amount of noise to the dataset. While a larger amount of noise (e.g. 4000) would provide stronger privacy protection, it would also result in more distortion to the original data. Furthermore, the Original UPB's values initially ranged between 4000-1387000, so it would not make sense to add a larger noise amount. Hence, we still need to consider the trade-off between privacy and accuracy when selecting the amount of noise to add.
+
+The same technique is also applied to the rest of the variables previously mentioned **(UPB at the Time of Removal, Foreclosure Cost, Property Preservation and Repair Costs, Asset Recovery Costs, Miscellaneous Holding Expenses and Credits, Associated Taxes for Holding Property, Net Sales Proceeds, Credit Enhancement Proceeds, Repurchase Make Whole Proceeds, Other Foreclosure Proceeds, 180 days unpaid principal balance, Account closure balance, 30 days unpaid principal balance, 60 days unpaid principal balance, 90 days unpaid principal balance**, and **Loan first modification unpaid principal balance)**
+
+Overall, applying perturbation to loan-related transactional data and expenses/revenues helps to protect the privacy and confidentiality of borrowers while still allowing the data to be used for analysis and research purposes.
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_orig_amt = orig_amt + rnorm(n(),0,2000))%>%
+ select(!orig_amt)
+
+plot(density(sampledata1$new_orig_amt), main = "New Kernel Density Plot of Original UPB", xlab = "Original UPB")
+# Find the maximum value of orig_am
+max_orig_amt1 <- max(sampledata1$new_orig_amt)
+print(max_orig_amt)
+
+# Find the minimum value of orig_am
+min_orig_amt1 <- min(sampledata1$new_orig_amt)
+print(min_orig_amt)
+
+```
+```{r, message = FALSE, eval = TRUE}
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_last_upb =  last_upb + rnorm(n(),0,2000))%>%
+ select(!last_upb)
+
+sampledata1 <- sampledata1 <- sampledata1 %>%
+ mutate(new_fcc_cost =  fcc_cost + rnorm(n(),0,2000))%>%
+ select(!fcc_cost)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_pp_cost = pp_cost + rnorm(n(),0,2000))%>%
+ select(!pp_cost)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_ar_cost = ar_cost + rnorm(n(),0,2000))%>%
+ select(!ar_cost)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_ie_cost = ie_cost + rnorm(n(),0,2000))%>%
+ select(!ie_cost)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_tax_cost = tax_cost + rnorm(n(),0,2000))%>%
+ select(!tax_cost)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_ns_procs = ns_procs + rnorm(n(),0,2000))%>%
+ select(!ns_procs)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_ce_procs = ce_procs + rnorm(n(),0,2000))%>%
+ select(!ce_procs)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_rmw_procs = rmw_procs + rnorm(n(),0,2000))%>%
+ select(!rmw_procs)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_o_procs = o_procs + rnorm(n(),0,2000))%>%
+ select(!o_procs)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_f180_upb = f180_upb + rnorm(n(),0,2000))%>%
+ select(!f180_upb)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_fce_upb = fce_upb + rnorm(n(),0,2000))%>%
+ select(!fce_upb)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_f30_upb = f30_upb + rnorm(n(),0,2000))%>%
+ select(!f30_upb)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_f60_upb = f60_upb + rnorm(n(),0,2000))%>%
+ select(!f60_upb)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_f90_upb = f90_upb + rnorm(n(),0,2000))%>%
+ select(!f90_upb)
+
+sampledata1 <- sampledata1 %>%
+ mutate(new_fmod_upb = fmod_upb + rnorm(n(),0,2000))%>%
+ select(!fmod_upb)
+
+
+```
+
+Besides that, there is also the geographical data of borrowers to consider. If a borrower's address is combined with other information about them, they can easily be identified. A **swapping** method is thus applied whereby we group borrowers by states and property types before swapping zip codes within each group. Not only does this help to protect individuals' privacy by ensuring each observation now has a different zip code, it is also useful for analyzing loan data based on these characteristics such as identifying trends or patterns in loan approvals or defaults for specific property types in different states.
+
+Firstly, we find the initial average income for borrowers grouped by states and property types before swapping zip codes (i.e. original dataset). This is followed by the zip code swapping operation, whereby the new dataset has already been grouped by state and property type. Each "state + property type" combination/group will be assigned a different zip code within the group, thereby obscuring individual data in the dataset and maintaining the statistical properties of the data. The new average income from this modified dataset is then computed as well.
+
+By comparing the initial average income and new average income for each group, it is observed that some are relatively different, as the distribution of income may be different across different states and property types. This is still acceptable, as the analytical validity of the data is still preserved (resulting dataset still contains enough information to answer research questions).
+
+```{r, message = FALSE, eval = TRUE}
+
+avg_income <- sampledata %>%
+  group_by(state, prop_typ) %>%
+  summarize(avg_income = mean(income))
+
+avg_income
+
+
+```
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata2 <- sampledata1 %>%
+  group_by (state, prop_typ) %>%
+  mutate(new_zip_3 = sample(zip_3,n(),replace = FALSE))%>%
+  select(!zip_3)
+
+new_avg_income <- sampledata2 %>%
+  group_by(state, prop_typ) %>%
+  summarize(new_avg_income = mean(income))
+
+merged_income <- left_join(avg_income, new_avg_income, by = c("state", "prop_typ"))
+merged_income
+
+```
+
+However, one potential risk with swapping is if the swapped zip codes are drawn from a limited set of possible zip codes within a group. Additionally, if the swapped zip codes are correlated with other variables/information (e.g. income, race, or age), someone may be able to use this information to re-identify individuals in the dataset. To combat this, we use **aggregation** on customer age.
+
+Aggregation involves splitting the customer age values into three equally sized groups (i.e. "age breaks). For instance, referring to the current age range in the initial dataset which was found to be "30-45", this means three groups with the ranges [30, 35), [35, 40), and [40, 45] are formed which also correspond to the approximate lower and upper bounds of the 30-45 age range. By grouping borrowers into larger age categories, this makes it harder to identify specific individuals based on their age alone. It also makes it more difficult to use age and combine it with other variables in the dataset to identify individuals, thus reducing the risk of re-identification. Yet, there may be loss of precision in the data. Besides loss of information at the individual level, aggregation can also make it more difficult to identify differences or patterns within specific age ranges. 
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata2 <- sampledata2 %>%
+ mutate(cus_agegroup = cut(cus_age, breaks = 3))%>%
+ select(!cus_age)
+
+```
+
+Last but not least, we perform a **top and bottom coding** approach on main borrower income. This is especially useful in addressing any outliers in the dataset (e.g. if there are any borrowers with unusually high or low incomes). For instance, if a borrower's income in a dataset is $1,000,000, which is much higher than the population's average income (or vice versa), this could be used to uniquely identify the individual. By top-coding the income to a more reasonable value, this can help ABC Bank protect the identity of customers by limiting the occurrence of such extreme values and appropriately masking these high-risk individuals.   
+
+Firstly, similar to what we did with original UPB earlier, we'll use a density plot to illustrate the initial distribution of income. Based on the first histogram below, we can see that the income group with the lowest frequency (i.e. extreme outliers) seem to fall within those borrowers who earn ~$20,000 and ~$1,000,0000. Hence, we censor these top and bottom values by substituting them with new minimum (i.e. $30,000) and maximum (i.e. $950,000) values respectively. 
+
+This is followed by grouping observations by age group before swapping main borrower income within each age group, to ensure individual incomes cannot be identified - the boxplot below suggests that for most age groups (with the exception of a few), income data is approximately symmetric and not highly skewed. The fact that the box plots are not highly skewed or do not have extreme values is a good indication that income distributions within each age group are relatively balanced and may be suitable for swapping for deidentification purposes. However, we exclude those who earn incomes higher than $950,000, because swapping may not be effective if there are only a limited number of borrowers within the age group earning that level of income.
+
+According to the new histogram, any extreme income values that fall below the lower cutoff or exceed the upper cutoff have been replaced, and there are no observations with unusually low frequencies. Despite the effectiveness of top and bottom coding in making borrowers less identifiable, it is important to note that top and bottom coding may reduce the usefulness of the data for some analyses. For instance, if accurate measures of income are required, the validity of the results may be affected. 
+
+```{r, message = FALSE, eval = TRUE}
+
+ggplot(sampledata2, aes(x = income)) + 
+  geom_histogram(binwidth = 10000, fill = "blue", color = "white") + 
+  labs(title = "Original Distribution of Income", x = "Income", y = "Frequency")
+
+```
+
+```{r}
+
+ggplot(data = sampledata2, aes(x = cus_agegroup, y = income)) +
+  geom_boxplot(fill = "#99CCEE", color = "#333333", alpha = 0.7) +
+  labs(x = "Age Group", y = "Income", title = "Income Distribution by Age Group") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r, message = FALSE, eval = TRUE}
+
+sampledata2 <- sampledata2 %>%
+  mutate(coded_income = ifelse(income > 950000, 950000, income)) %>%
+  select(-income) %>%
+  mutate(coded_income = ifelse(coded_income < 30000, 30000, coded_income))
+
+sampledata2 <- sampledata2 %>%
+  group_by(cus_agegroup) %>%
+  mutate(coded_income = ifelse(coded_income < 950000, sample(coded_income,n(),replace = FALSE), coded_income))
+  
+  
+ggplot(data = sampledata2, aes(x = coded_income)) + 
+  geom_histogram(binwidth = 10000, fill = "red", color = "white") + 
+  labs(title = "New Distribution of Income", x = "Income", y = "Frequency")
+
+```
+
+
+```{r, message = FALSE, eval = TRUE}
+
+saveRDS(sampledata2, here::here("data/release-data-Goh-Alexandra.rds"))
+
+```
+
+
+
+# Resources
+
+Cite your data sources, and software used here:
+
+DrivenData. (n.d.). Deon: Data Science Ethics Checklist. Retrieved from https://deon.drivendata.org/#default-checklist
+
+Fannie Mae. (2023). Single-Family Loan Performance Data. Retrieved from https://capitalmarkets.fanniemae.com/credit-risk-transfer/single-family-credit-risk-transfer/fannie-mae-single-family-loan-performance-data 
+
+H. Wickham. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York, 2016.
+
+Müller K (2020). _here: A Simpler Way to Find Your Files_. R package version 1.0.1,
+  <https://CRAN.R-project.org/package=here>.
+
+Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L,
+  Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J, Robinson D, Seidel DP, Spinu
+  V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). “Welcome to the tidyverse.” _Journal
+  of Open Source Software_, *4*(43), 1686. doi:10.21105/joss.01686
+  <https://doi.org/10.21105/joss.01686>.
+  
+Wickham H, François R, Henry L, Müller K, Vaughan D (2023). _dplyr: A Grammar of Data
+  Manipulation_. R package version 1.1.2, <https://CRAN.R-project.org/package=dplyr>.
+
+Yihui Xie (2023). knitr: A General-Purpose Package for Dynamic Report Generation in R. R package
+  version 1.42.

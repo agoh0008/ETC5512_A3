@@ -1,0 +1,6 @@
+"0",""
+"0","sampledata1 <- sampledata1 %>%"
+"0"," mutate(new_orig_amt = orig_amt + rnorm(n(),0,2000))%>%"
+"0"," select(!orig_amt)"
+"0",""
+"0","plot(density(sampledata1$new_orig_amt), main = ""New Kernel Density Plot of Original UPB"", xlab = ""Original UPB"")"

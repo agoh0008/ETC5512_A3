@@ -1,0 +1,6 @@
+"0",""
+"0","avg_income <- sampledata %>%"
+"0","  group_by(state, prop_typ) %>%"
+"0","  summarize(avg_income = mean(income))"
+"0",""
+"0","avg_income"

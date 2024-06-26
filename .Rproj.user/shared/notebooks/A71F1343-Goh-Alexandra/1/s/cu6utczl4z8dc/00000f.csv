@@ -1,0 +1,7 @@
+"0",""
+"0","ggplot(data = sampledata2, aes(x = cus_agegroup, y = income)) +"
+"0","  geom_boxplot(fill = ""#99CCEE"", color = ""#333333"", alpha = 0.7) +"
+"0","  labs(x = ""Age Group"", y = ""Income"", title = ""Income Distribution by Age Group"") +"
+"0","  theme_minimal() +"
+"0","  theme(axis.text.x = element_text(angle = 45, hjust = 1))"
+"0",""
