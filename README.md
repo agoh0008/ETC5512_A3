@@ -1,6 +1,6 @@
 # ETC5512: Assignment 3 - Data Data Deidentification and Modification
 
-This repository includes the work and materials for Assignment 3 of the ETC5512 unit (Wild-caught data).
+This repository contains the work and materials for Assignment 3 of the ETC5512 unit (Wild-caught data).
 
 The assignment focuses on deidentifying a dataset for release as open data, preparing the dataset for computer consumption using the tidyverse, and creating accompanying documentation to facilitate its use.
 
